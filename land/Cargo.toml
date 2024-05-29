@@ -1,0 +1,8 @@
+[package]
+name = "controller"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+joydev = "0.3"
+ctrlc = "3.2"

@@ -1,3 +1,3 @@
 micro/.pio
-land/Cargo.lock
-land/target
+onboard-controller/Cargo.lock
+onboard-controller/target

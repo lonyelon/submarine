@@ -1,0 +1,8 @@
+[package]
+name = "onboard-controller"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rppal = "0.18.0"
+ahrs = "0.6.0"

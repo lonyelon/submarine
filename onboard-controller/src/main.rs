@@ -6,14 +6,14 @@ use std::thread;
 use std::time::Duration;
 
 struct SensorData {
-    gyro: Vector3<f32>,
-    accel: Vector3<f32>,
-    mag: Vector3<f32>,
-    temp: f32,
+    gyro: Vector3<f64>,
+    accel: Vector3<f64>,
+    mag: Vector3<f64>,
+    temp: f64,
 }
 
-fn normalize_sensor_value(a: u8, b: u8) -> f32 {
-    (((a as i16) << 8 | b as i16) as f32) / ((i16::MAX) as f32)
+fn normalize_sensor_value(a: u8, b: u8) -> f64 {
+    (((a as i16) << 8 | b as i16) as f64) / ((std::i16::MAX) as f64)
 }
 
 fn init_sensor_mag(spi: &Spi, cs: &mut rppal::gpio::OutputPin) -> Result<(), Box<dyn Error>> {
@@ -48,7 +48,7 @@ fn read_sensor_data(spi: &Spi, cs: &mut rppal::gpio::OutputPin) -> Result<Sensor
             normalize_sensor_value(read_buffer[1], read_buffer[2]),
             normalize_sensor_value(read_buffer[3], read_buffer[4]),
             normalize_sensor_value(read_buffer[5], read_buffer[6]),
-        ),
+        ) * 2.0 * std::f64::consts::PI,
         temp: normalize_sensor_value(read_buffer[7], read_buffer[8]),
         gyro: Vector3::new(
             normalize_sensor_value(read_buffer[9], read_buffer[10]),
@@ -75,22 +75,36 @@ fn sensor_whoami(spi: &Spi, cs: &mut rppal::gpio::OutputPin) -> Result<u8, Box<d
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let mut ahrs = Madgwick::default();
     let spi = Spi::new(Bus::Spi0, SlaveSelect::Ss0, 100_000, Mode::Mode3)?;
     let gpio = rppal::gpio::Gpio::new()?;
     let mut cs = gpio.get(25)?.into_output();
     cs.set_high();
-    
+
     // Check if we are using a mpu9250 sensor (that has a magnetometer).
-    let main_sensor_whoami = sensor_whoami(&spi, &mut cs)?;
-    if main_sensor_whoami == 0x71 {
+    let main_sensor_id = sensor_whoami(&spi, &mut cs)?;
+    if main_sensor_id == 0x71 {
         init_sensor_mag(&spi, &mut cs)?;
     } else {
         eprintln!("ERR Gyroscope is not mpu9250 (0x71), got {}",
-            main_sensor_whoami);
+            main_sensor_id);
     }
 
     loop {
-        let data = read_sensor_data(&spi, &mut cs)?;
+        let mut data = read_sensor_data(&spi, &mut cs)?;
+
+        // If we have no mag data then we need to add something to it since the
+        // Madgwick filter uses it's norm in a division.
+        if main_sensor_id != 0x71 {
+            data.mag = Vector3::new(0.5, 0.0, 0.0);
+        }
+
+        let quat = ahrs.update(
+            &data.gyro,
+            &data.accel,
+            &data.mag,
+        ).unwrap();
+        let val = quat.euler_angles();
 
         println!("ACCEL: [{:2.4}, {:2.4}, {:2.4}]",
             data.accel.x, data.accel.y, data.accel.z);
@@ -99,6 +113,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("MAG:   [{:2.4}, {:2.4}, {:2.4}]",
             data.mag.x, data.mag.y, data.mag.z);
         println!("TEMP:  {:2.4}", data.temp);
+        println!("ANG:   [{:2.4}, {:2.4}, {:2.4}]", val.0, val.1, val.2);
+        println!();
 
         thread::sleep(Duration::from_millis(100));
     }

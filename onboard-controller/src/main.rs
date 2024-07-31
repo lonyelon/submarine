@@ -1,12 +1,14 @@
+use ahrs::{Ahrs, Madgwick};
+use nalgebra::Vector3;
 use rppal::spi::{Bus, Mode, SlaveSelect, Spi};
 use std::error::Error;
 use std::thread;
 use std::time::Duration;
 
 struct SensorData {
-    gyro: [f32; 3],
-    accel: [f32; 3],
-    mag: [f32; 3],
+    gyro: Vector3<f32>,
+    accel: Vector3<f32>,
+    mag: Vector3<f32>,
     temp: f32,
 }
 
@@ -42,22 +44,22 @@ fn read_sensor_data(spi: &Spi, cs: &mut rppal::gpio::OutputPin) -> Result<Sensor
     cs.set_high();
 
     Ok(SensorData {
-        accel: [
+        accel: Vector3::new(
             normalize_sensor_value(read_buffer[1], read_buffer[2]),
             normalize_sensor_value(read_buffer[3], read_buffer[4]),
             normalize_sensor_value(read_buffer[5], read_buffer[6]),
-        ],
+        ),
         temp: normalize_sensor_value(read_buffer[7], read_buffer[8]),
-        gyro: [
+        gyro: Vector3::new(
             normalize_sensor_value(read_buffer[9], read_buffer[10]),
             normalize_sensor_value(read_buffer[11], read_buffer[12]),
             normalize_sensor_value(read_buffer[13], read_buffer[14]),
-        ],
-        mag: [
+        ),
+        mag: Vector3::new(
             normalize_sensor_value(read_buffer[15], read_buffer[16]),
             normalize_sensor_value(read_buffer[17], read_buffer[18]),
             normalize_sensor_value(read_buffer[19], read_buffer[20]),
-        ],
+        ),
     })
 }
 
@@ -91,11 +93,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         let data = read_sensor_data(&spi, &mut cs)?;
 
         println!("ACCEL: [{:2.4}, {:2.4}, {:2.4}]",
-            data.accel[0], data.accel[1], data.accel[2]);
+            data.accel.x, data.accel.y, data.accel.z);
         println!("GYRO:  [{:2.4}, {:2.4}, {:2.4}]",
-            data.gyro[0], data.gyro[1], data.gyro[2]);
+            data.gyro.x, data.gyro.y, data.gyro.z);
         println!("MAG:   [{:2.4}, {:2.4}, {:2.4}]",
-            data.mag[0], data.mag[1], data.mag[2]);
+            data.mag.x, data.mag.y, data.mag.z);
         println!("TEMP:  {:2.4}", data.temp);
 
         thread::sleep(Duration::from_millis(100));
